@@ -1,0 +1,33 @@
+# conda env create -f environment.yml
+# then replace the CPU-only PyTorch (installed with Kilosort) by a CUDA build that matches your GPU driver
+# (see https://pytorch.org/get-started/locally/) - uninstall first, otherwise pip keeps the CPU build, e.g.:
+#   pip uninstall -y torch
+#   pip install torch --index-url https://download.pytorch.org/whl/cu128
+#
+# Version notes:
+# - spikeinterface: the postprocessing uses sc.get_potential_auto_merge (deprecated in newer versions in favor of
+#   sc.compute_merge_unit_groups) and analyzer.merge_units(merging_mode=..., sparsity_overlap=...), so stay on 0.102.x
+#   unless you update those calls.
+# - To record the exact versions of a working setup: conda env export > environment.lock.yml
+name: spikesorting
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - pip
+  - numpy
+  - libblas=*=*openblas   # numpy's linear algebra through OpenBLAS: the default MKL build crashed numpy.linalg on Windows (error 0xC06D007F)
+  - scipy
+  - pandas
+  - matplotlib
+  - seaborn
+  - networkx
+  - scikit-learn=1.4.2    # the version the UnitRefine classifiers were saved with (newer versions fail to load them)
+  - tqdm
+  - pip:
+      - spikeinterface[full]>=0.102,<0.103
+      - kilosort>=4.0.16,<4.1.2   # Kilosort4 (needs PyTorch, see above). 4.1.2+ changed an internal function SpikeInterface 0.102 relies on
+      - medicine-neuro         # MEDiCINe motion estimation (https://github.com/jazlab/medicine), imported as `medicine`
+      - neo>=0.14.1,<0.14.5    # reading Blackrock / Plexon files (0.14.5 removed an argument SpikeInterface 0.102 uses to read SpikeGLX)
+      - huggingface_hub        # UnitRefine classifiers are downloaded from HuggingFace
+      - skops                  # loading the UnitRefine classifiers

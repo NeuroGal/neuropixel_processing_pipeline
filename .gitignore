@@ -1,0 +1,5 @@
+local_config.py
+logs/
+__pycache__/
+*.pyc
+temporary_test_files/

@@ -1,0 +1,3 @@
+monkey,date,region,session_num,folder_local,folder_server,neuropixel_filename,trigger_filename
+Jones,20260702,Pul,25,D:/data/Jones_20260702_Pul,//server/lab/data/Jones_20260702_Pul,Jones_20260702_g0_t0.imec0.ap.bin,Jones_20260702
+Jones,20260702,LIP,25,D:/data/Jones_20260702_LIP,//server/lab/data/Jones_20260702_LIP,Jones_20260702_g0_t0.imec1.ap.bin,Jones_20260702
