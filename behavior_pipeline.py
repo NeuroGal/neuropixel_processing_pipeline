@@ -15,11 +15,12 @@ Run from the command line, e.g.:
     python behavior_pipeline.py --monkeys Jones --dates 20260702
 """
 import numpy as np
+from pathlib import Path
 import pandas as pd
 import config
 from scipy.interpolate import interp1d
 from tasks import get_task
-from raw_io import load_events, load_sync_times, load_eye_data, load_nidq_codes, load_nidq_sync_times, load_imec_sync_times, get_imec_stream_id
+from raw_io import load_events, load_sync_times, load_eye_data, load_nidq_codes, load_nidq_sync_times, load_imec_sync_times, get_imec_stream_id, read_meta
 from trial_data import (get_task_data_files, save_session_data, save_sorting_data, save_trial_eye, save_trial_lfp,
                         save_continuous_eye, load_continuous_eye, get_continuous_eye_file)
 from pipelines_functions import (copy_to_server, copy_from_server, delete_outputs,
@@ -192,11 +193,12 @@ def parse_spikes(sorting, trials, t_before, t_after):
             spike_times[tr_i, u_i] = spikes[(spikes >= t_start - t_before) & (spikes <= t_end + t_after)] - t_start
     return spike_times
 
-def kilosort_unit_metrics(sorting, duration, presence_bin_s=60.0):
+def kilosort_unit_metrics(sorting, duration, sorting_folder=None, presence_bin_s=60.0):
     """
     Unit table of a Kilosort sorting without postprocessing: Kilosort's own unit properties (KSLabel, ContamPct, Amplitude, and the
     group/quality from phy curation if any), plus num_spikes, firing_rate and presence_ratio (the fraction of presence_bin_s bins with
     a spike, as SpikeInterface computes it), so the default GOOD_UNITS_QUERY works.
+    With Kilosort4's spike_positions.npy in sorting_folder, also depth_um: the median depth of the unit's spikes (um from the probe tip).
     """
     fs = sorting.get_sampling_frequency()
     units = pd.DataFrame({key: sorting.get_property(key) for key in sorting.get_property_keys()}, index=pd.Index(sorting.get_unit_ids(), name='unit_id'))
@@ -205,17 +207,28 @@ def kilosort_unit_metrics(sorting, duration, presence_bin_s=60.0):
     units['num_spikes'] = [len(t) for t in trains]
     units['firing_rate'] = units['num_spikes'] / duration
     units['presence_ratio'] = [np.mean(np.histogram(t, bins)[0] > 0) for t in trains]
+    positions_file = None if sorting_folder is None else Path(sorting_folder) / 'spike_positions.npy'
+    if positions_file is not None and positions_file.exists():
+        clusters = np.load(Path(sorting_folder) / 'spike_clusters.npy').ravel()
+        depth = np.load(positions_file, mmap_mode='r')[:, 1]
+        median_depth = pd.Series(np.asarray(depth)).groupby(clusters).median()
+        units['depth_um'] = [median_depth.get(original, np.nan) for original in units.get('original_cluster_id', units.index)]
     return units
 
 def load_sorting_and_units(rec_id, sorting_type, data_location='local', logger=None):
     """(sorting, unit metrics) of a postprocessing stage ('original' / 'merged' / 'cleaned') or of the Kilosort output ('kilosort')."""
     if sorting_type == 'kilosort':
-        import spikeinterface.extractors as se
-        from sorting_pipeline import load_sorting
+        from sorting_pipeline import load_sorting, external_sorting_folder
         sorting = load_sorting(rec_id, logger=logger, location=data_location)
         raw_path = rec_id.folder('raw_data', location=data_location, mkdir=False)
-        duration = se.read_spikeglx(raw_path, stream_id=get_imec_stream_id(rec_id, raw_path)).get_total_duration()
-        return sorting, kilosort_unit_metrics(sorting, duration)
+        # the recording's duration from the probe's .meta file (only the metadata is needed, not the .bin)
+        stream = get_imec_stream_id(rec_id, raw_path)
+        meta_file = next(iter(sorted(Path(raw_path).rglob(f'*.{stream}.meta')) or sorted(Path(raw_path).rglob(f"*.{stream.replace('.ap', '.lf')}.meta"))), None)
+        if meta_file is None:
+            raise ValueError(f"No {stream} .meta file in {raw_path} (needed for the recording's duration).")
+        duration = float(read_meta(meta_file)['fileTimeSecs'])
+        sorting_folder = external_sorting_folder(rec_id) or rec_id.folder('sorting', location=data_location, mkdir=False) / 'sorter_output'
+        return sorting, kilosort_unit_metrics(sorting, duration, sorting_folder=sorting_folder)
     from postprocessing_pipeline import load_sorting_analyzer, get_unit_metrics
     analyzer = load_sorting_analyzer(rec_id=rec_id, sorting_type=sorting_type, data_location=data_location, logger=logger)
     return analyzer.sorting, get_unit_metrics(analyzer, data_location=data_location)
