@@ -133,6 +133,7 @@ A csv with one row per recording (one probe in one session), at the path given b
 | `neuropixel_filename` | if several probes share a raw data folder | e.g. `run_g0_t0.imec1.ap.bin`: selects the probe, and gives the NIDQ name for server copies |
 | `sorting_folder` | no | an existing Kilosort / phy output folder to use instead of sorting with this pipeline, see [Starting from your own sorting](#starting-from-your-own-sorting) |
 | `trigger_filename` | for the behavior pipeline | name of the second system's file. The extension is added from `SECOND_SYSTEM`: `.nev` for Blackrock (the `.nsX` files with the same name hold its analog inputs), `.pl2` for Plexon |
+| `trigger_folder` | no | where the second system's file is, if not in the raw data folder (e.g. a separate Blackrock folder next to the SpikeGLX run folder) |
 | `session_num` (your `FILTER_COLUMNS`) | no | only used to select recordings (`--session_nums`) |
 | any other columns | no | ignored by the pipelines - add your own notes freely |
 

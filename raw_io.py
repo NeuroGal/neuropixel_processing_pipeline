@@ -54,12 +54,21 @@ def open_bin(bin_path):
     data = np.memmap(bin_path, dtype=np.int16, mode='r')
     return data.reshape(-1, n_chans), fs
 
-def iter_channel(bin_path, channel, chunk_duration_s=60):
-    """Yield (first_sample, values) chunks of a single channel."""
-    data, fs = open_bin(bin_path)
+def iter_channel(bin_path, channel, chunk_duration_s=10):
+    """
+    Yield (first_sample, values) chunks of a single channel. Reads the file chunk by chunk (not memory-mapped), so memory stays at one
+    chunk even for long recordings: a memory map of a whole multi-GB file keeps every page it touched in the process's memory.
+    """
+    meta = read_meta(bin_path)
+    n_chans = int(meta['nSavedChans'])
+    fs = float(meta['imSampRate'] if meta.get('typeThis') == 'imec' else meta['niSampRate'])
+    n_samples = Path(bin_path).stat().st_size // (2 * n_chans)
+    channel = channel % n_chans
     chunk = int(chunk_duration_s * fs)
-    for start in range(0, data.shape[0], chunk):
-        yield start, np.asarray(data[start:start + chunk, channel])
+    with open(bin_path, 'rb') as f:
+        for start in range(0, n_samples, chunk):
+            block = np.fromfile(f, dtype=np.int16, count=min(chunk, n_samples - start) * n_chans).reshape(-1, n_chans)
+            yield start, block[:, channel].copy()
 
 def get_imec_stream_id(rec_id, raw_path):
     """
@@ -173,11 +182,16 @@ def load_imec_sync_times(raw_path, imec_stream_id, bit):
 FILE_SUFFIX = dict(blackrock='.nev', plexon='.pl2')
 
 def get_trigger_file(rec_id, second_system, data_location):
-    """Path of the second system's file: trigger_filename column of the recording table (extension added per system), in the raw_data folder."""
+    """
+    Path of the second system's file: trigger_filename column of the recording table (extension added per system), in the raw_data
+    folder - or in the trigger_folder column's folder, if filled (for second-system files kept apart from the SpikeGLX run folder).
+    """
     filename = rec_id.info.get('trigger_filename')
     if not isinstance(filename, str):
         raise ValueError("No trigger_filename in the recording table for this recording.")
-    return find_file(rec_id.folder('raw_data', location=data_location, mkdir=False), Path(filename).with_suffix(FILE_SUFFIX[second_system]).name)
+    folder = rec_id.info.get('trigger_folder')
+    folder = Path(folder) if isinstance(folder, str) and folder.strip() else rec_id.folder('raw_data', location=data_location, mkdir=False)
+    return find_file(folder, Path(filename).with_suffix(FILE_SUFFIX[second_system]).name)
 
 def open_reader(second_system, rec_id, data_location='server'):
     """neo reader of the second system's file (header parsed; signals are memory-mapped, not loaded)."""
