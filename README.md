@@ -329,7 +329,7 @@ In words: present for more than 75% of the session, and firing more than 3 Hz wh
 - The criteria used are recorded in `task_data_info.json`.
 - This is in addition to the noise-unit removal in postprocessing: the `cleaned` stage drops units UnitRefine classifies as noise with p > 0.5.
 
-**Trials.** `keep_trial` is set by the task parser's `keep_trial` function. In both current tasks, it keeps trials with a completed response (correct or error).
+**Trials.** `keep_trial` is set by the task parser's `keep_trial` function. In both current tasks, it keeps trials with a completed response (correct or error). `dots_2d` also leaves out runs of 3 or more highest-coherence trials at the start of a block (marked in `block_start_high_coh`).
 
 ## Task parsers
 

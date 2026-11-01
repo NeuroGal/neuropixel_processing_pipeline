@@ -106,9 +106,26 @@ def parse_codes(event_times, event_codes, extract_important_only=False, testing_
     for column in ['targ_correct_loc', 'targ_chosen_loc']:
         label_column(df, column, TARGET_LABELS)
     label_column(df, 'accuracy_detailed', ACCURACY_DETAILED_LABELS)
+    df['block_start_high_coh'] = block_starts_high_coh(df)
     return df
 
 
+def block_starts_high_coh(trials):
+    """Marks the highest coherence trials at the start of 2D / 1D blocks - only if there are 3 or more in a row."""
+    task_changes = trials['task_type'].ne(trials['task_type'].shift(1)) & trials['task_type'].isin(['2D', '1D_motion', '1D_color'])
+    block_starts = np.where(task_changes)[0]  # the first trial of each block
+
+    find_if_max = lambda col: np.abs(trials[col]) == np.nanmax(np.abs(trials[col]))
+    is_max_coh = (find_if_max('signed_motion_coh') | find_if_max('signed_color_coh')).values
+
+    block_start_high_coh = np.zeros(len(trials), dtype=bool)
+    for b in block_starts:
+        n_consec = np.argmax(~is_max_coh[b:])  # how many consecutive trials are is_max_coh starting from b
+        if n_consec >= 3:
+            block_start_high_coh[b:(b + n_consec)] = True
+    return block_start_high_coh
+
+
 def keep_trial(trials):
-    """Trials to analyze: a response was completed (i.e. not aborted at some point & not no response)."""
-    return ~trials['accuracy'].isna()   # maybe use 'bad_trial' instead?
+    """Trials to analyze: a response was completed (i.e. not aborted at some point & not no response), and not a high coherence trial at the start of a block."""
+    return ~trials['accuracy'].isna() & ~trials['block_start_high_coh']   # maybe use 'bad_trial' instead?
