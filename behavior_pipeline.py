@@ -113,15 +113,16 @@ def nidq_to_imec_mapping(rec_id, raw_path, nidq_sync_channel, imec_sync_bit, log
     nidq_matched, imec_matched = nidq_edges[matched], imec_edges[nearest[matched]]
     offsets_ms = (imec_matched - nidq_matched) * 1000
     # sanity checks that both channels really record the same sync wave: same period, most edges matched, and an offset that
-    # changes smoothly (linear clock drift) - otherwise unrelated edges may have been paired
+    # changes smoothly - a jump between neighboring edges means unrelated edges were paired. The drift itself doesn't have to be
+    # linear (the mapping interpolates between the edges): it can bend by more than 1 ms over a long session
     imec_period = np.median(np.diff(imec_edges))
-    residuals_ms = offsets_ms - np.polyval(np.polyfit(nidq_matched, offsets_ms, 1), nidq_matched)
-    if abs(imec_period - period) > 0.01 * period or matched.mean() < 0.9 or np.abs(residuals_ms).max() > 1:
+    max_jump_ms = np.abs(np.diff(offsets_ms)).max()
+    if abs(imec_period - period) > 0.01 * period or matched.mean() < 0.9 or max_jump_ms > 1:
         raise ValueError(f"The NIDQ and probe sync edges don't look like the same sync wave (periods {period:.4f} / {imec_period:.4f} s, "
-                         f"{matched.mean():.0%} of edges matched, max deviation from linear drift {np.abs(residuals_ms).max():.2f} ms). "
+                         f"{matched.mean():.0%} of edges matched, max offset jump between neighboring edges {max_jump_ms:.2f} ms). "
                          "Check NIDQ_SYNC_CHANNEL / IMEC_SYNC_BIT.")
     log_or_print(f"NIDQ->probe clock: matched {matched.sum()}/{len(nidq_edges)} sync edges; probe - NIDQ offset is {offsets_ms[0]:.2f} ms at the start "
-                 f"and {offsets_ms[-1]:.2f} ms at the end of the recording.", logger=logger)
+                 f"and {offsets_ms[-1]:.2f} ms at the end of the recording (max jump between neighboring edges {max_jump_ms:.3f} ms).", logger=logger)
     return interp1d(nidq_matched, imec_matched, kind='linear', fill_value='extrapolate')
 
 # %% clock alignment - the mapping used by the pipeline
