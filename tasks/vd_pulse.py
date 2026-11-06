@@ -49,7 +49,8 @@ def parse_trial(tc, extract_important_only=True):
 
     # behavioral responses
     trial.update(outcome(tc))
-    trial['complete'] = True if trial['correct'] else False if trial['error'] else np.nan  # only have values for correct\incorrect, and nans for other cases
+    trial['complete'] = trial['correct'] or trial['error']  # a response was completed (correct or error)
+    trial['accuracy'] = True if trial['correct'] else False if trial['error'] else np.nan  # only have values for correct\incorrect, and nans for other cases
 
     # choice: 1 for choosing the right target, 0 for the left target (nan for trials without a completed choice)
     if not (trial['correct'] or trial['error']) or np.isnan(trial['signed_motion_dir']):
@@ -88,4 +89,4 @@ def parse_codes(event_times, event_codes, extract_important_only=False, testing_
 
 def keep_trial(trials):
     """Trials to analyze: a response was completed (correct or error)."""
-    return ~trials['complete'].isna()
+    return trials['complete'].astype(bool)

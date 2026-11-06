@@ -338,7 +338,7 @@ Event codes become a trial table through a parser in `tasks/`, chosen with `TASK
 | Task | For | Notes |
 |---|---|---|
 | `dots_2d` | the 2D dots task (motion + color) and its 1D motion / 1D color / overlap / memory variants | |
-| `vd_pulse` | VGS / MGS / motion discrimination with a motion pulse (VD_pulse_2), before and after injection | `post_inj` is a column, and `task_type` is the same before and after. 0% coherence is stored as ±0.001 so its direction is kept. `choice` is 1 for right and 0 for left (only for completed trials) |
+| `vd_pulse` | VGS / MGS / motion discrimination with a motion pulse (VD_pulse_2), before and after injection | `post_inj` is a column, and `task_type` is the same before and after. 0% coherence is stored as ±0.001 so its direction is kept. `choice` is 1 for right and 0 for left (only for completed trials). `complete` is True for correct and error trials; `accuracy` is True / False for them (NaN otherwise). Before November 2026, `complete` held what `accuracy` holds now |
 
 What's in `tasks/`:
 
