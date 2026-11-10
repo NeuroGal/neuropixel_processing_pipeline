@@ -26,7 +26,7 @@ from spikeinterface.sortingcomponents.peak_detection import detect_peaks
 from spikeinterface.sortingcomponents.peak_localization import localize_peaks
 from raw_io import get_imec_stream_id
 from pipelines_functions import (RecordingID,
-                                 is_nonempty_dir, save_json, require_output, require_no_output, delete_outputs, log_or_print, update_info_df, copy_to_server, copy_from_server, server_sync_enabled,
+                                 is_nonempty_dir, save_json, require_output, require_no_output, delete_outputs, log_or_print, update_info_df, copy_to_server, copy_from_server, delete_local_raw_copies, server_sync_enabled,
                                  run_batch_pipeline, main_pipeline_parser)
 
 # %% parameters
@@ -305,7 +305,15 @@ def prepro_sorting_pipeline(rec_id, logger=None):
     """
     Run the entire pipeline for a given recording, skipping steps that were already computed
     (or recomputing everything with OVERWRITE_PROCESSING), + the LFP with EXTRACT_LFP (see lfp.py).
+    With SERVER_SYNC['sorting'] and DELETE_LOCAL_RAW_COPIES, the local raw copies are deleted at the end.
     """
+    try:
+        _prepro_sorting_pipeline(rec_id, logger=logger)
+    finally:
+        if server_sync_enabled('sorting'):
+            delete_local_raw_copies(rec_id, logger=logger)
+
+def _prepro_sorting_pipeline(rec_id, logger=None):
     extract_lfp = config.EXTRACT_LFP
     root_folder = rec_id.folder('root')
     log_or_print(f"Starting preprocessing and sorting pipeline for recording {rec_id} ({root_folder}).", logger=logger)

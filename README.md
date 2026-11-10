@@ -104,6 +104,7 @@ All settings are in the config; the command line only selects recordings. Copy `
 | `RECORDING_KEYS` | columns of the recording table that together identify a recording (default `monkey, date, region`), see [Recording identifiers](#recording-identifiers) |
 | `FILTER_COLUMNS` | other columns to select recordings by on the command line (default `session_num`) |
 | `SERVER_SYNC` | per pipeline, whether to copy inputs from and outputs to `folder_server`. Copies are updated on reruns: new and changed files are copied, and nothing is deleted locally. Leave everything `False` on a single machine |
+| `DELETE_LOCAL_RAW_COPIES` | with `SERVER_SYNC`: delete the local copies of the raw files at the end of each recording (sorting, behavior, LFP), for a local disk without room for all the raw data. Only local files with a same-size copy on the server are deleted; nothing on the server is ever deleted |
 | `JOB_KWARGS` | parallel processing: `n_jobs` (number of cores, or a fraction of them) and `chunk_duration` (lower it, e.g. `'0.5s'`, if you run out of RAM; also passed to Kilosort) |
 | `OVERWRITE_PROCESSING`, `OVERWRITE_TASK_DATA` | what happens to existing outputs, see [Reruns and overwriting](#reruns-and-overwriting) |
 | `KEEP_PREPROCESSED_DATA` | `False` deletes the preprocessed recording after the sorting (with MEDiCINe), see [Disk space and run time](#disk-space-and-run-time) |
@@ -151,7 +152,7 @@ Where that folder is:
 
 Files are also found in subfolders, so SpikeGLX's own layout works as it is. That layout keeps each probe in its own subfolder (`run_g0/run_g0_imec0/...ap.bin`) with the NIDQ file one level up. Keep one recording (one SpikeGLX run / gate / trigger) per folder.
 
-With `SERVER_SYNC` turned on, missing files are copied from `<folder_server>/raw_data/` (also searched in subfolders).
+With `SERVER_SYNC` turned on, missing files are copied from `<folder_server>/raw_data/` (also searched in subfolders). The behavior pipeline copies the second system's file(s), the NIDQ file and the probe's LF file (AP if there is no LF) for the probe-clock alignment; the LFP copies the LF file, and the AP file if there is no LF or the MEDiCINe motion has to be estimated. `folder_server` can be any folder, e.g. on an external drive.
 
 ## Adapting to your setup
 

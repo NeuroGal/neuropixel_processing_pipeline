@@ -41,7 +41,7 @@ import config
 from spikeinterface.sortingcomponents.motion.motion_interpolation import InterpolateMotionRecording
 from raw_io import get_imec_stream_id, find_stream_file
 from pipelines_functions import (is_nonempty_dir, require_output, log_or_print, delete_outputs, update_info_df, copy_to_server, copy_from_server,
-                                 server_sync_enabled, run_batch_pipeline, main_pipeline_parser)
+                                 delete_local_raw_copies, server_sync_enabled, run_batch_pipeline, main_pipeline_parser)
 
 # %% parameters
 
@@ -140,16 +140,26 @@ def lfp_pipeline(rec_id, logger=None):
     """
     The LFP of a recording on its own (python lfp.py ...), e.g. when the sorting is done or not needed.
     Skipped if preprocessing/lfp exists, unless OVERWRITE_PROCESSING. With SERVER_SYNC['lfp'], the probe files are copied from the server
-    first and the LFP is copied back after.
+    first (LF, and AP if there is no LF or the MEDiCINe motion has to be estimated) and the LFP (and MEDiCINe motion) is copied back after.
     """
-    if server_sync_enabled('lfp'):
-        copy_from_server(rec_id=rec_id, files_to_copy='neuropixel_data', logger=logger)
-    if config.OVERWRITE_PROCESSING:
-        delete_outputs(rec_id, ['lfp'], logger=logger)
-    extract_lfp(rec_id, logger=logger)
-    update_info_df(rec_id, columns=['lfp_extracted'], logger=logger)
-    if server_sync_enabled('lfp'):
-        copy_to_server(rec_id=rec_id, folders_to_copy=['lfp'], logger=logger)
+    try:
+        if server_sync_enabled('lfp'):
+            from sorting_pipeline import MEDICINE_FILES
+            has_lf = copy_from_server(rec_id=rec_id, files_to_copy='neuropixel_sync', logger=logger) == 'neuropixel_lf'
+            medicine_folder = rec_id.folder('medicine', mkdir=False)
+            needs_motion = load_lfp_params().motion_correction == 'medicine' and not all((medicine_folder / f).exists() for f in MEDICINE_FILES)
+            if has_lf and needs_motion:   # the MEDiCINe motion is estimated from the AP data
+                copy_from_server(rec_id=rec_id, files_to_copy='neuropixel_data', logger=logger)
+        if config.OVERWRITE_PROCESSING:
+            delete_outputs(rec_id, ['lfp'], logger=logger)
+        extract_lfp(rec_id, logger=logger)
+        update_info_df(rec_id, columns=['lfp_extracted'], logger=logger)
+        if server_sync_enabled('lfp'):
+            medicine = ['medicine'] if is_nonempty_dir(rec_id.folder('medicine', mkdir=False)) else []
+            copy_to_server(rec_id=rec_id, folders_to_copy=['lfp'] + medicine, logger=logger)
+    finally:
+        if server_sync_enabled('lfp'):
+            delete_local_raw_copies(rec_id, logger=logger)
 
 if __name__ == '__main__':
     batch_kwargs = main_pipeline_parser()

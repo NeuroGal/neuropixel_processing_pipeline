@@ -35,12 +35,18 @@ SUMMARY_LOG_DIR = None
 #   sorting:        copies the raw probe data from the server before, and raw_data, motion_corrected_data, medicine, spike_sorting
 #                   (and lfp) to the server after (not preprocessed_data - fast to recompute)
 #   postprocessing: copies the postprocessing folder to the server after
-#   behavior:       copies the second system's file(s) and the NIDQ file from the server before, and task/data (and eye) to the server after
-#   lfp:            (lfp.py, LFP only) copies the probe files from the server before, and the lfp folder to the server after
+#   behavior:       copies the second system's file(s), the NIDQ file and (with ALIGN_NIDQ_TO_IMEC) the probe's LF file - or AP if there
+#                   is no LF - from the server before, and task/data (and eye) to the server after
+#   lfp:            (lfp.py, LFP only) copies the probe's LF file (if there is one) and AP file (if there is no LF, or to estimate the
+#                   MEDiCINe motion) from the server before, and the lfp (and medicine) folder to the server after
 #   (each also copies its log file to the server)
 # Files that already exist locally are not copied from the server again, and folders that already exist on the server are not
 # copied to it again (so after a rerun, delete the server copy to update it).
 SERVER_SYNC = dict(sorting=False, postprocessing=False, behavior=False, lfp=False)
+# With SERVER_SYNC: delete the local copies of the raw files at the end of each recording (sorting, behavior, lfp - also if the run failed),
+# for a local disk without room for all the raw data. Only local files with a same-size copy in the server raw_data folder are deleted;
+# nothing on the server is ever deleted. The outputs (lfp, task, ...) stay local.
+DELETE_LOCAL_RAW_COPIES = False
 
 # Parallel processing (SpikeInterface job kwargs, see https://spikeinterface.readthedocs.io/en/stable/modules/core.html#parallel-processing-and-job-kwargs)
 #   n_jobs: number of cores, or a fraction of them; chunk_duration: lower it (e.g. '0.5s') if you run out of RAM - it is also passed to Kilosort

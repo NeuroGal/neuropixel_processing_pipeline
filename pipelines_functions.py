@@ -384,8 +384,10 @@ def copy_to_server(rec_id, folders_to_copy, mirror=False, copy_log=True, logger=
 def copy_from_server(rec_id, files_to_copy='all', skip_if_exists=True, logger=None):
     """
     Copy raw files from the server raw_data folder to the local raw_data folder.
-    files_to_copy: 'triggers' (the second system's file(s)), 'neuropixel_triggers' (nidq), 'neuropixel_data' (imec ap), or 'all'
-    (file names are taken from the trigger_filename / neuropixel_filename columns of the recording table)
+    files_to_copy: 'triggers' (the second system's file(s)), 'neuropixel_triggers' (nidq), 'neuropixel_data' (imec ap),
+    'neuropixel_lf' (imec lf - NP1.0 probes only), 'neuropixel_sync' (the probe file with the sync wave: lf if it exists on the server, else ap),
+    or 'all' (file names are taken from the trigger_filename / neuropixel_filename columns of the recording table)
+    Returns the group that was copied.
     """
     # server files
     recording_server_folder = rec_id.folder('root', location='server', mkdir=False)
@@ -395,7 +397,9 @@ def copy_from_server(rec_id, files_to_copy='all', skip_if_exists=True, logger=No
         value = info.get(col)
         return None if pd.isna(value) else str(value)
 
-    if info_value('trigger_filename'):
+    if info_value('trigger_folder'):
+        triggers = []   # the second system's files are read where they are (the trigger_folder column), not copied
+    elif info_value('trigger_filename'):
         from raw_io import FILE_SUFFIX
         trigger_file = find_file(server_raw_path, Path(info_value('trigger_filename')).with_suffix(FILE_SUFFIX[config.SECOND_SYSTEM]).name)
         triggers = [trigger_file]
@@ -408,10 +412,15 @@ def copy_from_server(rec_id, files_to_copy='all', skip_if_exists=True, logger=No
         nidq_name = neuropixel_filename.split('.')[0]
         neuropixel_triggers = [find_file(server_raw_path, f"{nidq_name}.nidq{ext}") for ext in ['.bin', '.meta']]
         neuropixel_data = [find_file(server_raw_path, Path(neuropixel_filename).with_suffix(ext).name) for ext in ['.bin', '.meta']]
+        neuropixel_lf = [find_file(server_raw_path, Path(neuropixel_filename.replace('.ap.', '.lf.')).with_suffix(ext).name) for ext in ['.bin', '.meta']]
+        neuropixel_lf = neuropixel_lf if neuropixel_lf[0].exists() and '.lf.' in neuropixel_lf[0].name else None
     else:
-        neuropixel_triggers = neuropixel_data = None
-    file_groups = dict(triggers=triggers, neuropixel_triggers=neuropixel_triggers, neuropixel_data=neuropixel_data)
+        neuropixel_triggers = neuropixel_data = neuropixel_lf = None
+    file_groups = dict(triggers=triggers, neuropixel_triggers=neuropixel_triggers, neuropixel_data=neuropixel_data, neuropixel_lf=neuropixel_lf)
 
+    if files_to_copy == 'neuropixel_sync':
+        files_to_copy = 'neuropixel_lf' if neuropixel_lf is not None else 'neuropixel_data'
+    group = files_to_copy
     if files_to_copy == 'all':
         files_to_copy = [f for group in file_groups.values() if group is not None for f in group]
     elif files_to_copy in file_groups:
@@ -433,6 +442,30 @@ def copy_from_server(rec_id, files_to_copy='all', skip_if_exists=True, logger=No
             log_or_print(f"Copying {filename} to {local_path}", logger=logger)
             single_file_copy(server_path, local_path)
             log_or_print(f"Finished copying {filename} to {local_path}", logger=logger)
+    return group   # the group copied (for 'neuropixel_sync': 'neuropixel_lf' or 'neuropixel_data')
+
+def delete_local_raw_copies(rec_id, logger=None):
+    """
+    With DELETE_LOCAL_RAW_COPIES in the config: delete the files of the local raw_data folder that have a copy of the same size in the
+    server raw_data folder (= the copies the pipelines made from the server). Files without a server copy are kept, and nothing on the
+    server is ever deleted (if the local and server raw_data folders are the same folder, nothing is deleted).
+    """
+    if not config.DELETE_LOCAL_RAW_COPIES:
+        return
+    local_raw = rec_id.folder('raw_data', location='local', mkdir=False)
+    server_raw = rec_id.folder('raw_data', location='server', mkdir=False)
+    if not local_raw.exists() or not server_raw.exists() or local_raw.resolve() == server_raw.resolve():
+        return
+    deleted, kept = [], []
+    for local_file in [f for f in local_raw.rglob('*') if f.is_file()]:
+        server_file = find_file(server_raw, local_file.name)
+        if server_file.exists() and server_file.resolve() != local_file.resolve() and server_file.stat().st_size == local_file.stat().st_size:
+            local_file.unlink()
+            deleted.append(local_file.name)
+        else:
+            kept.append(local_file.name)
+    log_or_print(f"Deleted the local raw copies of {rec_id} ({len(deleted)} files: {deleted})"
+                 + (f"; kept {kept} (no same-size copy on the server)." if kept else "."), logger=logger)
 
 # %% run the pipeline
 

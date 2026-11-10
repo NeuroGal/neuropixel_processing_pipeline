@@ -23,7 +23,7 @@ from tasks import get_task
 from raw_io import load_events, load_sync_times, load_eye_data, load_nidq_codes, load_nidq_sync_times, load_imec_sync_times, get_imec_stream_id, read_meta
 from trial_data import (get_task_data_files, save_session_data, save_sorting_data, save_trial_eye, save_trial_lfp,
                         save_continuous_eye, load_continuous_eye, get_continuous_eye_file)
-from pipelines_functions import (copy_to_server, copy_from_server, delete_outputs,
+from pipelines_functions import (copy_to_server, copy_from_server, delete_outputs, delete_local_raw_copies,
                                  server_sync_enabled, log_or_print, run_batch_pipeline, main_pipeline_parser, update_info_df)
 
 # %% clock alignment
@@ -258,8 +258,16 @@ def beh_pipeline(rec_id, logger=None):
     """
     Trial-aligned data of one recording (settings: the behavior pipeline section of the config).
     BEHAVIOR_DATA_LOCATION: 'server' or 'local' - where to load the data from & where to save
-        with 'local' and SERVER_SYNC['behavior'], the raw event files are copied from the server first and the outputs copied back after.
+        with 'local' and SERVER_SYNC['behavior'], the raw event files are copied from the server first and the outputs copied back after
+        (and with DELETE_LOCAL_RAW_COPIES, the local raw copies are deleted at the end).
     """
+    try:
+        _beh_pipeline(rec_id, logger=logger)
+    finally:
+        if server_sync_enabled('behavior') and config.BEHAVIOR_DATA_LOCATION == 'local':
+            delete_local_raw_copies(rec_id, logger=logger)
+
+def _beh_pipeline(rec_id, logger=None):
     second_system, task_name, alignment_method = config.SECOND_SYSTEM.lower(), config.TASK, config.ALIGNMENT_METHOD
     data_location = config.BEHAVIOR_DATA_LOCATION
     task = get_task(task_name)
@@ -277,6 +285,8 @@ def beh_pipeline(rec_id, logger=None):
         log_or_print(f"{rec_id}: copying from server to local", logger=logger)
         copy_from_server(rec_id=rec_id, files_to_copy='triggers', logger=logger)
         copy_from_server(rec_id=rec_id, files_to_copy='neuropixel_triggers', logger=logger)
+        if config.ALIGN_NIDQ_TO_IMEC:   # the probe's sync wave (LF file if there is one)
+            copy_from_server(rec_id=rec_id, files_to_copy='neuropixel_sync', logger=logger)
 
     # 1-2. events & eye data, in the neuropixel clock
     event_times, event_codes = load_events(second_system, rec_id, data_location=data_location)
