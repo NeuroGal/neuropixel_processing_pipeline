@@ -23,7 +23,7 @@ from tasks import get_task
 from raw_io import load_events, load_sync_times, load_eye_data, load_nidq_codes, load_nidq_sync_times, load_imec_sync_times, get_imec_stream_id, read_meta
 from trial_data import (get_task_data_files, save_session_data, save_sorting_data, save_trial_eye, save_trial_lfp,
                         save_continuous_eye, load_continuous_eye, get_continuous_eye_file)
-from pipelines_functions import (copy_to_server, copy_from_server, delete_outputs, delete_local_raw_copies,
+from pipelines_functions import (copy_to_server, copy_from_server, delete_outputs, delete_local_raw_copies, delete_local_outputs, is_nonempty_dir,
                                  server_sync_enabled, log_or_print, run_batch_pipeline, main_pipeline_parser, update_info_df)
 
 # %% clock alignment
@@ -259,7 +259,7 @@ def beh_pipeline(rec_id, logger=None):
     Trial-aligned data of one recording (settings: the behavior pipeline section of the config).
     BEHAVIOR_DATA_LOCATION: 'server' or 'local' - where to load the data from & where to save
         with 'local' and SERVER_SYNC['behavior'], the raw event files are copied from the server first and the outputs copied back after
-        (and with DELETE_LOCAL_RAW_COPIES, the local raw copies are deleted at the end).
+        (and with DELETE_LOCAL_RAW_COPIES / DELETE_LOCAL_OUTPUTS, the local raw copies / outputs are deleted at the end).
     """
     try:
         _beh_pipeline(rec_id, logger=logger)
@@ -309,7 +309,10 @@ def _beh_pipeline(rec_id, logger=None):
         save_trial_eye(rec_id, eye, trials, t_before, t_after, data_location=data_location)
         log_or_print("Saved the eye data per trial.", logger=logger)
     if config.TRIAL_LFP:
-        save_trial_lfp(rec_id, trials, t_before, t_after, reference=config.TRIAL_LFP_REFERENCE, data_location=data_location, logger=logger)
+        # the LFP is read from the server if it isn't local (e.g. deleted locally after lfp.py, DELETE_LOCAL_OUTPUTS)
+        lfp_location = 'server' if sync_with_server and not is_nonempty_dir(rec_id.folder('lfp', mkdir=False)) else data_location
+        save_trial_lfp(rec_id, trials, t_before, t_after, reference=config.TRIAL_LFP_REFERENCE, data_location=data_location,
+                       lfp_location=lfp_location, logger=logger)
 
     # 4. spikes & units per sorting stage
     for sorting_type in config.BEHAVIOR_SORTING_TYPES:
@@ -326,6 +329,7 @@ def _beh_pipeline(rec_id, logger=None):
             copy_to_server(rec_id, folders_to_copy=['eye'], copy_log=False, logger=logger)
         log_or_print('Finished copying to server', logger=logger)
         update_info_df(rec_id=rec_id, columns=['behavior_parsed_on_server'], logger=logger)
+        delete_local_outputs(rec_id, ['task/data'] + (['eye'] if eye is not None else []), logger=logger)
 
 # %% main
 

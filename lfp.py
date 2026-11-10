@@ -41,7 +41,7 @@ import config
 from spikeinterface.sortingcomponents.motion.motion_interpolation import InterpolateMotionRecording
 from raw_io import get_imec_stream_id, find_stream_file
 from pipelines_functions import (is_nonempty_dir, require_output, log_or_print, delete_outputs, update_info_df, copy_to_server, copy_from_server,
-                                 delete_local_raw_copies, sync_folder, server_sync_enabled, run_batch_pipeline, main_pipeline_parser)
+                                 delete_local_raw_copies, delete_local_outputs, sync_folder, server_sync_enabled, run_batch_pipeline, main_pipeline_parser)
 
 # %% parameters
 
@@ -141,8 +141,13 @@ def lfp_pipeline(rec_id, logger=None):
     The LFP of a recording on its own (python lfp.py ...), e.g. when the sorting is done or not needed.
     Skipped if preprocessing/lfp exists, unless OVERWRITE_PROCESSING. With SERVER_SYNC['lfp'], the probe files are copied from the server
     first (LF, and AP if there is no LF or the MEDiCINe motion has to be estimated; a MEDiCINe motion already on the server, in
-    <folder_server>/preprocessing/medicine, is copied and reused) and the LFP (and MEDiCINe motion) is copied back after.
+    <folder_server>/preprocessing/medicine, is copied and reused) and the LFP (and MEDiCINe motion) is copied back after
+    (and deleted locally with DELETE_LOCAL_OUTPUTS). Also skipped if the LFP is already on the server, unless OVERWRITE_PROCESSING.
     """
+    if (server_sync_enabled('lfp') and not config.OVERWRITE_PROCESSING and not is_nonempty_dir(rec_id.folder('lfp', mkdir=False))
+            and is_nonempty_dir(rec_id.folder('lfp', location='server', mkdir=False))):
+        log_or_print(f"{rec_id}: the LFP is already on the server - not recomputing (set OVERWRITE_PROCESSING to recompute).", logger=logger)
+        return
     try:
         if server_sync_enabled('lfp'):
             from sorting_pipeline import MEDICINE_FILES
@@ -162,6 +167,7 @@ def lfp_pipeline(rec_id, logger=None):
         if server_sync_enabled('lfp'):
             medicine = ['medicine'] if is_nonempty_dir(rec_id.folder('medicine', mkdir=False)) else []
             copy_to_server(rec_id=rec_id, folders_to_copy=['lfp'] + medicine, logger=logger)
+            delete_local_outputs(rec_id, ['lfp'] + medicine, logger=logger)
     finally:
         if server_sync_enabled('lfp'):
             delete_local_raw_copies(rec_id, logger=logger)

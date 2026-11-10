@@ -105,13 +105,14 @@ def read_lfp_traces(lfp, start_frame, end_frame, channel_ids=None):
     except TypeError:
         return lfp.get_traces(start_frame=start_frame, end_frame=end_frame, channel_ids=channel_ids, return_in_uV=True)
 
-def save_trial_lfp(rec_id, trials, t_before, t_after, reference=None, data_location='local', logger=None):
+def save_trial_lfp(rec_id, trials, t_before, t_after, reference=None, data_location='local', lfp_location=None, logger=None):
     """
     LFP per trial, from the continuous LFP (preprocessing/lfp). Written trial by trial into a memory-mapped file,
     so the whole thing never has to fit in memory. reference: None or 'median' (subtract the median across the in-brain channels).
+    lfp_location: where to read the continuous LFP ('local' / 'server'; default: data_location, where the output is saved).
     """
     from lfp import load_lfp
-    lfp = load_lfp(rec_id, data_location=data_location)
+    lfp = load_lfp(rec_id, data_location=lfp_location or data_location)
     fs, n_samples = lfp.get_sampling_frequency(), lfp.get_num_samples()
     start_frames = np.clip(np.floor((trials['t_start'].values - t_before) * fs).astype(int), 0, n_samples)
     end_frames = np.clip(np.ceil((trials['t_end'].values + t_after) * fs).astype(int), 0, n_samples)

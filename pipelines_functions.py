@@ -444,6 +444,25 @@ def copy_from_server(rec_id, files_to_copy='all', skip_if_exists=True, logger=No
             log_or_print(f"Finished copying {filename} to {local_path}", logger=logger)
     return group   # the group copied (for 'neuropixel_sync': 'neuropixel_lf' or 'neuropixel_data')
 
+def delete_local_outputs(rec_id, folders, logger=None):
+    """
+    With DELETE_LOCAL_OUTPUTS in the config: delete local output folders (e.g. 'lfp', 'task/data') once every file in them has a copy on
+    the server with the same size and modification time. A folder with any file missing on the server is kept (and logged).
+    """
+    if not config.DELETE_LOCAL_OUTPUTS:
+        return
+    for folder in folders:
+        local = rec_id.folder(folder, location='local', mkdir=False)
+        server = rec_id.folder(folder, location='server', mkdir=False)
+        if not local.exists() or local.resolve() == server.resolve():
+            continue
+        missing = [f for f in local.rglob('*') if f.is_file() and not same_file(f, server / f.relative_to(local))]
+        if missing:
+            log_or_print(f"Not deleting {local}: {len(missing)} files are not on the server (e.g. {missing[0].name}).", logger=logger)
+            continue
+        shutil.rmtree(local)
+        log_or_print(f"Deleted the local {folder} folder of {rec_id} (it is on the server: {server}).", logger=logger)
+
 def delete_local_raw_copies(rec_id, logger=None):
     """
     With DELETE_LOCAL_RAW_COPIES in the config: delete the files of the local raw_data folder that have a copy of the same size and

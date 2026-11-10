@@ -41,8 +41,8 @@ SUMMARY_LOG_DIR = None
 #                   MEDiCINe motion - a MEDiCINe motion already in <folder_server>/preprocessing/medicine is copied and reused instead)
 #                   from the server before, and the lfp (and medicine) folder to the server after
 #   (each also copies its log file to the server)
-# Files that already exist locally are not copied from the server again, and folders that already exist on the server are not
-# copied to it again (so after a rerun, delete the server copy to update it).
+# Files that already exist locally are not copied from the server again. Outputs copied to the server update what is there (new and
+# changed files are copied); task/data on the server is replaced as a whole (its files from an older run are deleted).
 SERVER_SYNC = dict(sorting=False, postprocessing=False, behavior=False, lfp=False)
 # With SERVER_SYNC: delete the local copies of the raw files at the end of each recording (each pipeline with SERVER_SYNC on - also if the
 # run failed), for a local disk without room for all the raw data. Only local files with a copy of the same size and modification time
@@ -53,6 +53,11 @@ SERVER_SYNC = dict(sorting=False, postprocessing=False, behavior=False, lfp=Fals
 # use it when the local raw_data folder holds the only copy, and check folder_server in the recording table first. Each pipeline copies
 # the raw files it needs again, so running several pipelines in a row copies them again each time.
 DELETE_LOCAL_RAW_COPIES = False
+# With SERVER_SYNC (behavior, lfp): delete the local outputs once they are on the server - lfp.py: lfp, medicine; behavior: task/data, eye.
+# A folder is deleted only if every file in it is on the server with the same size and modification time. The behavior pipeline then
+# reads the LFP for TRIAL_LFP from the server, and lfp.py skips recordings whose LFP is already on the server (unless OVERWRITE_PROCESSING).
+# Not for sorting / postprocessing (the next step reads their outputs locally). Logs stay local (and are copied to the server).
+DELETE_LOCAL_OUTPUTS = False
 
 # Parallel processing (SpikeInterface job kwargs, see https://spikeinterface.readthedocs.io/en/stable/modules/core.html#parallel-processing-and-job-kwargs)
 #   n_jobs: number of cores, or a fraction of them; chunk_duration: lower it (e.g. '0.5s') if you run out of RAM - it is also passed to Kilosort
