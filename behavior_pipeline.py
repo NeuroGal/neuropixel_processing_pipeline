@@ -260,6 +260,7 @@ def beh_pipeline(rec_id, logger=None):
     BEHAVIOR_DATA_LOCATION: 'server' or 'local' - where to load the data from & where to save
         with 'local' and SERVER_SYNC['behavior'], the raw event files are copied from the server first and the outputs copied back after
         (and with DELETE_LOCAL_RAW_COPIES / DELETE_LOCAL_OUTPUTS, the local raw copies / outputs are deleted at the end).
+        Sortings and the LFP that aren't local are then read from the server.
     """
     try:
         _beh_pipeline(rec_id, logger=logger)
@@ -316,7 +317,10 @@ def _beh_pipeline(rec_id, logger=None):
 
     # 4. spikes & units per sorting stage
     for sorting_type in config.BEHAVIOR_SORTING_TYPES:
-        sorting, unit_metrics = load_sorting_and_units(rec_id, sorting_type, data_location=data_location, logger=logger)
+        # with server sync, sortings that aren't local are read from the server (not copied)
+        local_sorting = rec_id.folder('sorting' if sorting_type == 'kilosort' else f'{sorting_type}_sorting/analyzer', mkdir=False)
+        sorting_location = 'server' if sync_with_server and not is_nonempty_dir(local_sorting) else data_location
+        sorting, unit_metrics = load_sorting_and_units(rec_id, sorting_type, data_location=sorting_location, logger=logger)
         spikes = parse_spikes(sorting=sorting, trials=trials, t_before=t_before, t_after=t_after)
         units = mark_good_units(unit_metrics, logger=logger).reset_index()  # unit_id as the first column
         save_sorting_data(rec_id, sorting_type=sorting_type, spikes=spikes, units=units, data_location=data_location)
