@@ -38,14 +38,20 @@ SUMMARY_LOG_DIR = None
 #   behavior:       copies the second system's file(s), the NIDQ file and (with ALIGN_NIDQ_TO_IMEC) the probe's LF file - or AP if there
 #                   is no LF - from the server before, and task/data (and eye) to the server after
 #   lfp:            (lfp.py, LFP only) copies the probe's LF file (if there is one) and AP file (if there is no LF, or to estimate the
-#                   MEDiCINe motion) from the server before, and the lfp (and medicine) folder to the server after
+#                   MEDiCINe motion - a MEDiCINe motion already in <folder_server>/preprocessing/medicine is copied and reused instead)
+#                   from the server before, and the lfp (and medicine) folder to the server after
 #   (each also copies its log file to the server)
 # Files that already exist locally are not copied from the server again, and folders that already exist on the server are not
 # copied to it again (so after a rerun, delete the server copy to update it).
 SERVER_SYNC = dict(sorting=False, postprocessing=False, behavior=False, lfp=False)
-# With SERVER_SYNC: delete the local copies of the raw files at the end of each recording (sorting, behavior, lfp - also if the run failed),
-# for a local disk without room for all the raw data. Only local files with a same-size copy in the server raw_data folder are deleted;
-# nothing on the server is ever deleted. The outputs (lfp, task, ...) stay local.
+# With SERVER_SYNC: delete the local copies of the raw files at the end of each recording (each pipeline with SERVER_SYNC on - also if the
+# run failed), for a local disk without room for all the raw data. Only local files with a copy of the same size and modification time
+# in the server raw_data folder are deleted (the copies the pipelines make keep the time); nothing on the server is ever deleted.
+# The outputs (lfp, task, ...) stay local.
+# WARNING: only turn this on when the server copy is the real, backed-up raw data. Copies are not compared byte by byte, so a
+# different server file with the same name, size and time would not protect the local one (e.g. a wrong folder_server). Never
+# use it when the local raw_data folder holds the only copy, and check folder_server in the recording table first. Each pipeline copies
+# the raw files it needs again, so running several pipelines in a row copies them again each time.
 DELETE_LOCAL_RAW_COPIES = False
 
 # Parallel processing (SpikeInterface job kwargs, see https://spikeinterface.readthedocs.io/en/stable/modules/core.html#parallel-processing-and-job-kwargs)

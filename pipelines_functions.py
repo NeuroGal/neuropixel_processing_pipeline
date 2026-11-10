@@ -446,8 +446,8 @@ def copy_from_server(rec_id, files_to_copy='all', skip_if_exists=True, logger=No
 
 def delete_local_raw_copies(rec_id, logger=None):
     """
-    With DELETE_LOCAL_RAW_COPIES in the config: delete the files of the local raw_data folder that have a copy of the same size in the
-    server raw_data folder (= the copies the pipelines made from the server). Files without a server copy are kept, and nothing on the
+    With DELETE_LOCAL_RAW_COPIES in the config: delete the files of the local raw_data folder that have a copy of the same size and
+    modification time in the server raw_data folder (= the copies the pipelines made from the server). Files without a server copy are kept, and nothing on the
     server is ever deleted (if the local and server raw_data folders are the same folder, nothing is deleted).
     """
     if not config.DELETE_LOCAL_RAW_COPIES:
@@ -459,13 +459,13 @@ def delete_local_raw_copies(rec_id, logger=None):
     deleted, kept = [], []
     for local_file in [f for f in local_raw.rglob('*') if f.is_file()]:
         server_file = find_file(server_raw, local_file.name)
-        if server_file.exists() and server_file.resolve() != local_file.resolve() and server_file.stat().st_size == local_file.stat().st_size:
+        if server_file.exists() and server_file.resolve() != local_file.resolve() and same_file(server_file, local_file):
             local_file.unlink()
             deleted.append(local_file.name)
         else:
             kept.append(local_file.name)
     log_or_print(f"Deleted the local raw copies of {rec_id} ({len(deleted)} files: {deleted})"
-                 + (f"; kept {kept} (no same-size copy on the server)." if kept else "."), logger=logger)
+                 + (f"; kept {kept} (no copy with the same size and time on the server)." if kept else "."), logger=logger)
 
 # %% run the pipeline
 

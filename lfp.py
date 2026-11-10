@@ -41,7 +41,7 @@ import config
 from spikeinterface.sortingcomponents.motion.motion_interpolation import InterpolateMotionRecording
 from raw_io import get_imec_stream_id, find_stream_file
 from pipelines_functions import (is_nonempty_dir, require_output, log_or_print, delete_outputs, update_info_df, copy_to_server, copy_from_server,
-                                 delete_local_raw_copies, server_sync_enabled, run_batch_pipeline, main_pipeline_parser)
+                                 delete_local_raw_copies, sync_folder, server_sync_enabled, run_batch_pipeline, main_pipeline_parser)
 
 # %% parameters
 
@@ -140,13 +140,18 @@ def lfp_pipeline(rec_id, logger=None):
     """
     The LFP of a recording on its own (python lfp.py ...), e.g. when the sorting is done or not needed.
     Skipped if preprocessing/lfp exists, unless OVERWRITE_PROCESSING. With SERVER_SYNC['lfp'], the probe files are copied from the server
-    first (LF, and AP if there is no LF or the MEDiCINe motion has to be estimated) and the LFP (and MEDiCINe motion) is copied back after.
+    first (LF, and AP if there is no LF or the MEDiCINe motion has to be estimated; a MEDiCINe motion already on the server, in
+    <folder_server>/preprocessing/medicine, is copied and reused) and the LFP (and MEDiCINe motion) is copied back after.
     """
     try:
         if server_sync_enabled('lfp'):
             from sorting_pipeline import MEDICINE_FILES
             has_lf = copy_from_server(rec_id=rec_id, files_to_copy='neuropixel_sync', logger=logger) == 'neuropixel_lf'
             medicine_folder = rec_id.folder('medicine', mkdir=False)
+            server_medicine = rec_id.folder('medicine', location='server', mkdir=False)
+            if (load_lfp_params().motion_correction == 'medicine' and not all((medicine_folder / f).exists() for f in MEDICINE_FILES)
+                    and all((server_medicine / f).exists() for f in MEDICINE_FILES)):   # reuse a MEDiCINe motion estimated before
+                sync_folder(server_medicine, medicine_folder, logger=logger)
             needs_motion = load_lfp_params().motion_correction == 'medicine' and not all((medicine_folder / f).exists() for f in MEDICINE_FILES)
             if has_lf and needs_motion:   # the MEDiCINe motion is estimated from the AP data
                 copy_from_server(rec_id=rec_id, files_to_copy='neuropixel_data', logger=logger)

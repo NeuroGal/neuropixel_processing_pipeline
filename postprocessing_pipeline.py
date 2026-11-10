@@ -27,7 +27,7 @@ import config
 import warnings
 from sorting_plots import export_sorting_plots, export_merge_summary_plots, plot_classification
 from pipelines_functions import (RecordingID, log_or_print, save_json, delete_outputs, is_nonempty_dir, require_output, require_no_output,
-                                 update_info_df, copy_to_server, server_sync_enabled, run_batch_pipeline, main_pipeline_parser)
+                                 update_info_df, copy_to_server, delete_local_raw_copies, server_sync_enabled, run_batch_pipeline, main_pipeline_parser)
 
 # %% parameters
 
@@ -625,7 +625,16 @@ def postprocessing_pipeline(rec_id, logger=None, data_location='local'):
     The pipeline runs on the local folders (data_location='local'; the batch runner doesn't pass anything else). Loading an analyzer
     from the server works (load_sorting_analyzer(..., data_location='server'), as the behavior pipeline does), but creating stages there
     isn't supported - use SERVER_SYNC['postprocessing'] to copy the results to the server.
+    The postprocessing doesn't read the raw files, but with SERVER_SYNC['postprocessing'] and DELETE_LOCAL_RAW_COPIES, local raw copies
+    left by an earlier step are deleted at the end too.
     """
+    try:
+        _postprocessing_pipeline(rec_id, logger=logger, data_location=data_location)
+    finally:
+        if server_sync_enabled('postprocessing') and data_location == 'local':
+            delete_local_raw_copies(rec_id, logger=logger)
+
+def _postprocessing_pipeline(rec_id, logger=None, data_location='local'):
     root_folder = rec_id.folder('root', location=data_location)
     log_or_print(f"Starting postprocessing pipeline for session {rec_id} ({root_folder}).", logger=logger)
     params = load_postprocessing_params()
